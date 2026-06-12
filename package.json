@@ -1,0 +1,26 @@
+{
+  "name": "open-evolve",
+  "module": "src/main.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "bun run src/main.ts",
+    "test": "bun test",
+    "check": "bun run tsc --noEmit",
+    "smoke": "bun run src/main.ts &sleep 2 && curl -s http://localhost:3000/health && kill %1",
+    "compile": "bun build src/main.ts --outdir dist --target bun"
+  },
+  "devDependencies": {
+    "@types/blessed": "^0.1.27",
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "blessed": "^0.1.81",
+    "blessed-contrib": "^4.11.0",
+    "playwright": "^1.60.0",
+    "z-ai-web-dev-sdk": "^0.0.18"
+  }
+}

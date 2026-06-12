@@ -1,0 +1,66 @@
+{
+  "scoreThreshold": 0.6,
+  "scoreWeights": {
+    "usefulness": 0.3,
+    "frequency": 0.2,
+    "integration": 0.15,
+    "security": 0.2,
+    "maintenance": 0.1,
+    "novelty": 0.05
+  },
+  "installLevels": {
+    "level1": {
+      "description": "Skills/prompts only",
+      "autoInstall": true,
+      "requireEval": false,
+      "requireHumanApproval": false
+    },
+    "level2": {
+      "description": "Read-only plugins",
+      "autoInstall": false,
+      "requireEval": true,
+      "requireHumanApproval": false
+    },
+    "level3": {
+      "description": "External API-calling tools",
+      "autoInstall": false,
+      "requireEval": true,
+      "requireHumanApproval": true
+    },
+    "level4": {
+      "description": "File-write/command-exec high-permission tools",
+      "autoInstall": false,
+      "requireEval": true,
+      "requireHumanApproval": true,
+      "blocked": true
+    }
+  },
+  "highRiskPermissions": [
+    "shell",
+    "filesystem write",
+    "browser automation",
+    "email sending",
+    "payment",
+    "deployment",
+    "database write",
+    "credential access"
+  ],
+  "scoutSources": [
+    "github",
+    "mcp_registry",
+    "npm",
+    "blog",
+    "paper",
+    "product_changelog"
+  ],
+  "scoutTopics": [
+    "AI agent plugin",
+    "MCP server",
+    "coding agent feature",
+    "self healing agent",
+    "agent security",
+    "agent evaluation"
+  ],
+  "maxCandidatesPerRun": 10,
+  "mvpMode": "discovery_only"
+}

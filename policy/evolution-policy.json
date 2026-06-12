@@ -1,0 +1,27 @@
+{
+  "maxAttempts": 3,
+  "cooldownMs": 30000,
+  "allowedPaths": [
+    "src/modules/agent-runtime.ts",
+    "src/modules/tool-router.ts",
+    "src/modules/skill-loader.ts",
+    "skills/",
+    "tests/"
+  ],
+  "forbiddenPaths": [
+    "src/core/event-bus.ts",
+    "src/core/policy.ts",
+    "supervisor/",
+    "evolution/",
+    "package.json",
+    "bun.lock"
+  ],
+  "evalCommands": [
+    "bun install --frozen-lockfile",
+    "bun test",
+    "bun run check",
+    "bun run smoke",
+    "bun run compile"
+  ],
+  "requiresApproval": false
+}

@@ -1,0 +1,6 @@
+{
+  "allowExternalPlugins": false,
+  "pluginDirectory": "src/plugins",
+  "requiredPermissions": true,
+  "sandboxedExecution": false
+}
