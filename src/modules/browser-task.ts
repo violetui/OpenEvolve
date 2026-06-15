@@ -36,8 +36,6 @@ export const BrowserTaskModule: AgentModule = {
       try {
         for (let i = 0; i < steps.length; i++) {
           const step = steps[i]!;
-          const startTime = Date.now();
-
           try {
             const data = await executeStep(page, step);
             completedSteps++;
@@ -175,7 +173,7 @@ async function executeStep(page: import("playwright").Page, step: BrowserStep): 
     }
 
     case "screenshot": {
-      const { mkdir, writeFile } = await import("node:fs/promises");
+      const { mkdir } = await import("node:fs/promises");
       const { join } = await import("node:path");
       const screenshotDir = join(process.cwd(), "data", "screenshots");
       await mkdir(screenshotDir, { recursive: true });

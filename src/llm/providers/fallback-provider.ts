@@ -5,7 +5,7 @@
  * Used when no real LLM provider is available.
  */
 
-import type { LLMProvider, LLMChatMessage, LLMTaskType } from "../types";
+import type { LLMProvider, LLMChatMessage } from "../types";
 
 const TASK_RESPONSES: Record<string, string> = {
   chat: "I'm OpenEvolve, an event-driven self-evolving agent. How can I help you today?",
@@ -49,19 +49,20 @@ export class FallbackProvider implements LLMProvider {
     maxTokens?: number;
     temperature?: number;
     topP?: number;
+    apiKey?: string;
+    baseUrl?: string;
+    tools?: any[];
+    tool_choice?: any;
   }): Promise<{
     content: string;
-    usage?: {
-      promptTokens: number;
-      completionTokens: number;
-      totalTokens: number;
-    };
+    toolCalls?: any[];
+    usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
   }> {
     // Try to infer task type from system message
     const systemMsg = request.messages.find((m) => m.role === "system");
     let taskType: string = "chat";
 
-    if (systemMsg) {
+    if (systemMsg && systemMsg.content) {
       const content = systemMsg.content.toLowerCase();
       if (content.includes("patch") || content.includes("repair")) {
         taskType = "patch_generate";
@@ -82,19 +83,20 @@ export class FallbackProvider implements LLMProvider {
     const userMsg = request.messages.find((m) => m.role === "user");
     const baseResponse = TASK_RESPONSES[taskType] ?? TASK_RESPONSES.chat!;
 
-    const content = userMsg
-      ? `[Fallback Provider] In response to: "${userMsg.content.substring(0, 80)}"\n\n${baseResponse}`
+    const content = (userMsg?.content)
+      ? `[Fallback Provider] In response to: "${String(userMsg.content).substring(0, 80)}"\n\n${baseResponse}`
       : baseResponse;
 
     // Simulate token usage
     const promptTokens = request.messages.reduce(
-      (sum, m) => sum + Math.ceil(m.content.length / 4),
+      (sum, m) => sum + Math.ceil((m.content?.length ?? 0) / 4),
       0
     );
     const completionTokens = Math.ceil(content.length / 4);
 
     return {
       content,
+      toolCalls: undefined,
       usage: {
         promptTokens,
         completionTokens,

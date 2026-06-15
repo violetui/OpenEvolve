@@ -1,7 +1,5 @@
 import { describe, it, expect } from "bun:test";
 import { EventBus } from "../src/core/event-bus";
-import { startModules } from "../src/core/module";
-import type { AgentModule } from "../src/core/module";
 
 describe("Agent self-healing pipeline", () => {
   it("should complete full event chain: failure → analysis → patch → eval", async () => {
@@ -12,11 +10,6 @@ describe("Agent self-healing pipeline", () => {
     bus.subscribeAll(async (event) => {
       eventLog.push(event.type);
     });
-
-    const ctx = {
-      bus,
-      env: process.env as Record<string, string | undefined>
-    };
 
     // Manually register module handlers (same as the real modules, but simplified for testing)
     // FailureMiner: subscribes to agent.failure.reported

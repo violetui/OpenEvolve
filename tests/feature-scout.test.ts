@@ -48,6 +48,7 @@ describe("Feature Scout pipeline", () => {
         url: "https://example.com",
         summary: "MCP Tool Adapter",
         capabilityType: "plugin" as const,
+        integrationType: "plugin" as const,
         proposedUse: "Connect external tools via MCP protocol",
         scores: {
           usefulness: 0.7,
@@ -100,6 +101,7 @@ describe("Feature Scout pipeline", () => {
           spec: {
             id: "spec-test",
             type: "plugin",
+            integrationType: "plugin" as const,
             description: "Test specification",
             permissions: {},
             events: {
@@ -165,6 +167,7 @@ describe("Feature Scout pipeline", () => {
             url: "https://example.com",
             summary: "test",
             capabilityType: "plugin" as const,
+            integrationType: "plugin" as const,
             proposedUse: "test",
             scores: { usefulness: 0, frequency: 0, integration: 0, security: 0, maintenance: 0, novelty: 0, overlap: 0 },
             status: "discovered" as const
@@ -200,6 +203,7 @@ describe("Feature Scout pipeline", () => {
           spec: {
             id: "spec-test",
             type: "plugin",
+            integrationType: "plugin" as const,
             description: "test",
             permissions: {},
             events: { subscribes: [], publishes: [] },

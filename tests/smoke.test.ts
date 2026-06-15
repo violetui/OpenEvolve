@@ -62,7 +62,7 @@ describe("Smoke tests", () => {
         subscribe: ["agent.failure.reported"]
       },
       setup(ctx) {
-        ctx.bus.subscribe("agent.failure.reported", async (event) => {
+        ctx.bus.subscribe("agent.failure.reported", async (_event) => {
           // Plugin handler
         });
       }

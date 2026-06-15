@@ -89,10 +89,11 @@ export class LLMService {
       }
     }
 
-    // All models failed — return error response from fallback provider
+    // All models failed
     const durationMs = Date.now() - startTime;
     return {
       content: `[Error] All LLM models failed for task "${request.taskType}". Please check model availability.`,
+      toolCalls: undefined,
       modelId: "error",
       modelName: "none",
       provider: "custom" as LLMProviderType,
@@ -121,21 +122,31 @@ export class LLMService {
     }
 
     try {
+      // Resolve API key: direct value > env var name > global env
+      const resolvedApiKey = config.apiKey
+        || (config.apiKeyEnvVar ? process.env[config.apiKeyEnvVar] : undefined)
+        || undefined;
+
       const result = await provider.chat({
         model: config.model,
         messages: request.messages,
         maxTokens: params.maxTokens,
         temperature: params.temperature,
         topP: params.topP,
+        apiKey: resolvedApiKey,
+        baseUrl: config.baseUrl,
+        tools: request.tools,
+        tool_choice: request.tool_choice,
       });
 
       return {
         content: result.content,
+        toolCalls: result.toolCalls,
         modelId,
         modelName: config.model,
         provider: config.provider,
         usage: result.usage,
-        durationMs: 0, // Will be set by caller
+        durationMs: 0,
         fallbackUsed: false,
       };
     } catch (error) {

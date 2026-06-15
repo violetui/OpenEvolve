@@ -14,7 +14,7 @@ import type {
   LLMProviderType,
   LLMModelStatus,
 } from "./types";
-import { ZAIProvider } from "./providers/zai-provider";
+import { OpenAIProvider } from "./providers/openai-provider";
 import { FallbackProvider } from "./providers/fallback-provider";
 
 export class ModelRegistry {
@@ -25,7 +25,7 @@ export class ModelRegistry {
 
   constructor(initialModels?: LLMModelConfig[]) {
     // Register built-in providers
-    this.registerProvider(new ZAIProvider());
+    this.registerProvider(new OpenAIProvider());
     this.registerProvider(new FallbackProvider());
 
     // Default configuration
@@ -114,7 +114,7 @@ export class ModelRegistry {
   setDefaultModel(modelId: string): boolean {
     if (!this.models.has(modelId)) return false;
     // Clear previous default flag
-    for (const [id, model] of this.models) {
+    for (const [, model] of this.models) {
       if (model.isDefault) {
         model.isDefault = false;
       }
@@ -235,13 +235,14 @@ export class ModelRegistry {
 // ===== Default Configuration Factory =====
 
 /**
- * Create a ModelRegistry with default model configurations
- * based on environment variables
+ * Create a ModelRegistry with minimal defaults.
+ * Models, routes, and fallback chain should be loaded from config.json
+ * via LLMService.loadConfig().
  */
 export function createDefaultRegistry(env: Record<string, string | undefined>): ModelRegistry {
   const registry = new ModelRegistry();
 
-  // Always register the fallback model
+  // Always register the fallback model as a safety net
   registry.registerModel({
     id: "fallback",
     name: "Fallback Provider (Mock)",
@@ -252,93 +253,13 @@ export function createDefaultRegistry(env: Record<string, string | undefined>): 
     priority: 999,
   });
 
-  // Register ZAI models if SDK is available
-  // The ZAI provider supports multiple models through the same SDK
-  const zaiModels: LLMModelConfig[] = [
-    {
-      id: "deepseek-v4-pro",
-      name: "DeepSeek V4 Pro",
-      provider: "zai",
-      model: "deepseek-v4-pro",
-      maxTokens: 8192,
-      temperature: 0.7,
-      isDefault: true,
-      status: "available",
-      costPer1kInput: 0.002,
-      costPer1kOutput: 0.008,
-      priority: 1,
-    },
-    {
-      id: "gpt-4o",
-      name: "GPT-4o",
-      provider: "zai",
-      model: "gpt-4o",
-      maxTokens: 4096,
-      temperature: 0.7,
-      isDefault: false,
-      status: "available",
-      costPer1kInput: 0.005,
-      costPer1kOutput: 0.015,
-      priority: 2,
-    },
-    {
-      id: "gpt-4o-mini",
-      name: "GPT-4o Mini",
-      provider: "zai",
-      model: "gpt-4o-mini",
-      maxTokens: 4096,
-      temperature: 0.7,
-      isDefault: false,
-      status: "available",
-      costPer1kInput: 0.00015,
-      costPer1kOutput: 0.0006,
-      priority: 3,
-    },
-    {
-      id: "claude-3.5-sonnet",
-      name: "Claude 3.5 Sonnet",
-      provider: "zai",
-      model: "claude-3.5-sonnet",
-      maxTokens: 8192,
-      temperature: 0.7,
-      isDefault: false,
-      status: "available",
-      costPer1kInput: 0.003,
-      costPer1kOutput: 0.015,
-      priority: 2,
-    },
-    {
-      id: "deepseek-r1",
-      name: "DeepSeek R1 (Reasoning)",
-      provider: "zai",
-      model: "deepseek-r1",
-      maxTokens: 16384,
-      temperature: 0.5,
-      isDefault: false,
-      status: "available",
-      costPer1kInput: 0.004,
-      costPer1kOutput: 0.016,
-      priority: 2,
-    },
-  ];
-
-  // Register ZAI models
-  for (const model of zaiModels) {
-    registry.registerModel(model);
-  }
+  registry.setFallbackModels([]);
 
   // Override default model from env if specified
   const envDefaultModel = env.LLM_DEFAULT_MODEL;
   if (envDefaultModel) {
     registry.setDefaultModel(envDefaultModel);
   }
-
-  // Set fallback chain
-  registry.setFallbackModels([
-    "deepseek-v4-pro",
-    "gpt-4o",
-    "gpt-4o-mini",
-  ]);
 
   return registry;
 }

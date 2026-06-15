@@ -1,15 +1,26 @@
-import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
+import { chromium } from "playwright-extra";
+import StealthPlugin from "puppeteer-extra-plugin-stealth";
+import type { Browser, BrowserContext, Page } from "playwright";
 import type { AgentModule } from "../core/module";
+
+// Apply the stealth plugin to evade bot detection
+chromium.use(StealthPlugin());
 
 /**
  * BrowserAutomation Core Module
  *
  * Manages the lifecycle of browser instances, provides a shared browser context
- * Uses Playwright's built-in Chromium by default (headless mode)
- * Can be configured via environment variables for system browser or headed mode
+ * Uses Playwright with stealth plugin to bypass anti-bot detection.
+ *
+ * Anti-detection measures:
+ *   - puppeteer-extra-plugin-stealth: hides navigator.webdriver, fakes plugins/chrome runtime
+ *   - Realistic user agent rotation
+ *   - --disable-blink-features=AutomationControlled
+ *   - Randomized viewport dimensions
+ *   - Common Accept-Language headers
  *
  * Environment variables:
- *   BROWSER_HEADLESS=true|false   Headless mode (default: true)
+ *   BROWSER_HEADLESS=true|false   Headless mode (default: false)
  *   BROWSER_TYPE=chromium|firefox  Browser type (default: chromium)
  *   BROWSER_SLOW_MO=0             Delay between operations in ms (default: 0)
  *
@@ -24,6 +35,36 @@ import type { AgentModule } from "../core/module";
 
 let browserInstance: Browser | null = null;
 let contextInstance: BrowserContext | null = null;
+
+const USER_AGENTS = [
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:128.0) Gecko/20100101 Firefox/128.0",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15",
+];
+
+const ACCEPT_LANGUAGES = [
+  "en-US,en;q=0.9",
+  "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7",
+  "en-GB,en;q=0.9,en-US;q=0.8",
+];
+
+function pick<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)]!;
+}
+
+function randomViewport(): { width: number; height: number } {
+  const viewports = [
+    { width: 1920, height: 1080 },
+    { width: 1680, height: 1050 },
+    { width: 1440, height: 900 },
+    { width: 1366, height: 768 },
+    { width: 1280, height: 720 },
+  ];
+  return pick(viewports);
+}
 
 /**
  * Get shared browser instance (lazy initialization)
@@ -40,9 +81,28 @@ export async function getBrowser(): Promise<Browser> {
         "--no-sandbox",
         "--disable-setuid-sandbox",
         "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--window-size=1280,720"
-      ]
+        "--disable-blink-features=AutomationControlled",
+        "--disable-features=IsolateOrigins,site-per-process",
+        "--disable-site-isolation-trials",
+        "--disable-web-security",
+        "--disable-features=BlockInsecurePrivateNetworkRequests",
+        "--disable-features=OutOfBlinkCors",
+        "--window-size=1920,1080",
+        "--start-maximized",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--disable-infobars",
+        "--disable-breakpad",
+        "--disable-component-extensions-with-background-pages",
+        "--disable-client-side-phishing-detection",
+        "--disable-sync",
+        "--disable-default-apps",
+        "--hide-scrollbars",
+        "--mute-audio",
+        "--disable-extensions",
+        "--disable-notifications",
+        "--disable-popup-blocking",
+      ],
     });
   }
   return browserInstance;
@@ -54,11 +114,26 @@ export async function getBrowser(): Promise<Browser> {
 export async function getBrowserContext(): Promise<BrowserContext> {
   if (!contextInstance) {
     const browser = await getBrowser();
+    const viewport = randomViewport();
     contextInstance = await browser.newContext({
-      viewport: { width: 1280, height: 720 },
-      userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      viewport,
+      userAgent: pick(USER_AGENTS),
       locale: "en-US",
-      timezoneId: "UTC"
+      timezoneId: "America/New_York",
+      geolocation: { latitude: 40.7128, longitude: -74.006 },
+      permissions: ["geolocation"],
+      extraHTTPHeaders: {
+        "Accept-Language": pick(ACCEPT_LANGUAGES),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Encoding": "gzip, deflate, br",
+        "DNT": "1",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Cache-Control": "max-age=0",
+      },
     });
   }
   return contextInstance;

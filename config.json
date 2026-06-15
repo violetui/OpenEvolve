@@ -1,0 +1,148 @@
+{
+  "system": {
+    "port": 3000,
+    "noTui": false,
+    "version": "0.2.0",
+    "browser": {
+      "headless": false,
+      "slowMo": 0
+    }
+  },
+  "llm": {
+    "defaultModelId": "deepseek-v4-pro",
+    "fallbackModelIds": ["deepseek-v4-pro", "gpt-4o", "gpt-4o-mini"],
+    "models": [
+      {
+        "id": "fallback",
+        "name": "Fallback Provider (Mock)",
+        "provider": "custom",
+        "model": "fallback",
+        "isDefault": false,
+        "status": "available",
+        "priority": 999
+      },
+      {
+        "id": "deepseek-v4-pro",
+        "name": "DeepSeek V4 Pro",
+        "provider": "openai",
+        "model": "deepseek-v4-pro",
+        "apiKey": "",
+        "apiKeyEnvVar": "DEEPSEEK_API_KEY",
+        "baseUrl": "https://api.deepseek.com",
+        "maxTokens": 8192,
+        "temperature": 0.7,
+        "isDefault": true,
+        "status": "available",
+        "costPer1kInput": 0.002,
+        "costPer1kOutput": 0.008,
+        "priority": 1
+      },
+      {
+        "id": "gpt-4o",
+        "name": "GPT-4o",
+        "provider": "openai",
+        "model": "gpt-4o",
+        "apiKey": "",
+        "baseUrl": "",
+        "maxTokens": 4096,
+        "temperature": 0.7,
+        "isDefault": false,
+        "status": "available",
+        "costPer1kInput": 0.005,
+        "costPer1kOutput": 0.015,
+        "priority": 2
+      },
+      {
+        "id": "gpt-4o-mini",
+        "name": "GPT-4o Mini",
+        "provider": "openai",
+        "model": "gpt-4o-mini",
+        "apiKey": "",
+        "baseUrl": "",
+        "maxTokens": 4096,
+        "temperature": 0.7,
+        "isDefault": false,
+        "status": "available",
+        "costPer1kInput": 0.00015,
+        "costPer1kOutput": 0.0006,
+        "priority": 3
+      },
+      {
+        "id": "claude-3.5-sonnet",
+        "name": "Claude 3.5 Sonnet",
+        "provider": "openai",
+        "model": "claude-3.5-sonnet",
+        "apiKey": "",
+        "baseUrl": "",
+        "maxTokens": 8192,
+        "temperature": 0.7,
+        "isDefault": false,
+        "status": "available",
+        "costPer1kInput": 0.003,
+        "costPer1kOutput": 0.015,
+        "priority": 2
+      },
+      {
+        "id": "deepseek-r1",
+        "name": "DeepSeek R1 (Reasoning)",
+        "provider": "openai",
+        "model": "deepseek-r1",
+        "apiKey": "",
+        "baseUrl": "",
+        "maxTokens": 16384,
+        "temperature": 0.5,
+        "isDefault": false,
+        "status": "available",
+        "costPer1kInput": 0.004,
+        "costPer1kOutput": 0.016,
+        "priority": 2
+      }
+    ],
+    "routes": [
+      {
+        "taskType": "chat",
+        "modelId": "deepseek-v4-pro",
+        "overrides": { "temperature": 0.7 }
+      },
+      {
+        "taskType": "patch_generate",
+        "modelId": "deepseek-v4-pro",
+        "overrides": { "temperature": 0.3, "maxTokens": 8192 }
+      },
+      {
+        "taskType": "feature_analyze",
+        "modelId": "deepseek-v4-pro",
+        "overrides": { "temperature": 0.5 }
+      },
+      {
+        "taskType": "spec_generate",
+        "modelId": "deepseek-v4-pro",
+        "overrides": { "temperature": 0.4, "maxTokens": 4096 }
+      },
+      {
+        "taskType": "prototype_build",
+        "modelId": "deepseek-v4-pro",
+        "overrides": { "temperature": 0.3, "maxTokens": 8192 }
+      },
+      {
+        "taskType": "code_review",
+        "modelId": "deepseek-v4-pro",
+        "overrides": { "temperature": 0.3 }
+      },
+      {
+        "taskType": "summarize",
+        "modelId": "gpt-4o-mini",
+        "overrides": { "temperature": 0.5, "maxTokens": 2048 }
+      },
+      {
+        "taskType": "embedding",
+        "modelId": "gpt-4o-mini"
+      }
+    ],
+    "settings": {
+      "requestTimeoutMs": 30000,
+      "maxRetries": 1,
+      "verboseLogging": false
+    }
+  }
+}

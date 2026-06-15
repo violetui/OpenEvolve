@@ -278,6 +278,10 @@ export type BrowserStep = {
   timeout?: number;
 };
 
+export type ProactiveEvents = {
+  "proactive.optimization.triggered": Record<string, never>;
+};
+
 export type SystemEvents = {
   "system.module.started": {
     moduleName: string;
@@ -326,6 +330,9 @@ export type FeatureCandidateStatus =
 
 export type FeatureInstallLevel = 1 | 2 | 3 | 4;
 
+/** How a discovered feature integrates into the system */
+export type FeatureIntegrationType = "plugin" | "code_patch" | "skill_file";
+
 export type FeatureCandidatePayload = {
   id: string;
   title: string;
@@ -333,6 +340,8 @@ export type FeatureCandidatePayload = {
   url: string;
   summary: string;
   capabilityType: FeatureCapabilityType;
+  /** How this candidate should be integrated: as a new plugin, code patch, or skill file */
+  integrationType: FeatureIntegrationType;
   proposedUse: string;
   scores: {
     usefulness: number;
@@ -359,7 +368,11 @@ export type FeatureScorePayload = {
 export type FeatureSpecPayload = {
   id: string;
   type: FeatureCapabilityType;
+  /** How this spec will be integrated */
+  integrationType: FeatureIntegrationType;
   description: string;
+  /** For code_patch: target files and change descriptions */
+  targetFiles?: string[];
   permissions: {
     network?: {
       allow: string[];
@@ -429,6 +442,128 @@ export type LLMEvents = {
   };
 };
 
+// ===== File Operations Events =====
+
+export type FileOpsEvents = {
+  "file.read.requested": {
+    file_path: string;
+    offset?: number;
+    limit?: number;
+  };
+
+  "file.read.completed": {
+    file_path: string;
+    content: string;
+    totalLines: number;
+    truncated: boolean;
+    error?: string;
+  };
+
+  "file.write.requested": {
+    file_path: string;
+    content: string;
+  };
+
+  "file.write.completed": {
+    file_path: string;
+    size: number;
+    error?: string;
+  };
+
+  "file.edit.requested": {
+    file_path: string;
+    old_string: string;
+    new_string: string;
+    replace_all?: boolean;
+  };
+
+  "file.edit.completed": {
+    file_path: string;
+    old_string: string;
+    new_string: string;
+    replacedCount: number;
+    error?: string;
+  };
+};
+
+// ===== Shell Execution Events =====
+
+export type ShellEvents = {
+  "shell.exec.requested": {
+    command: string;
+    timeout?: number;
+    workdir?: string;
+  };
+
+  "shell.exec.completed": {
+    command: string;
+    stdout: string;
+    stderr: string;
+    exitCode: number;
+    timedOut: boolean;
+    error?: string;
+  };
+};
+
+// ===== File Search Events =====
+
+export type FileSearchEvents = {
+  "file.glob.requested": {
+    pattern: string;
+    path?: string;
+  };
+
+  "file.glob.completed": {
+    pattern: string;
+    path: string;
+    files: string[];
+    error?: string;
+  };
+
+  "file.grep.requested": {
+    pattern: string;
+    path?: string;
+    include?: string;
+  };
+
+  "file.grep.completed": {
+    pattern: string;
+    path: string;
+    results: Array<{
+      file: string;
+      line: number;
+      content: string;
+    }>;
+    error?: string;
+  };
+};
+
+// ===== Todo Management Events =====
+
+export interface TodoItem {
+  id: string;
+  content: string;
+  status: "pending" | "in_progress" | "completed";
+  createdAt: string;
+}
+
+export type TodoEvents = {
+  "todo.operation.requested": {
+    action: "create" | "update" | "list" | "delete";
+    todos?: Array<{
+      content: string;
+      status?: "pending" | "in_progress" | "completed";
+    }>;
+    taskId?: string;
+  };
+
+  "todo.operation.completed": {
+    action: string;
+    todos: TodoItem[];
+    error?: string;
+  };
+};
+
 // ===== Merge All Events =====
 
 export type AppEventMap =
@@ -439,6 +574,11 @@ export type AppEventMap =
   PluginRuntimeEvents &
   BrowserEvents &
   LLMEvents &
-  SystemEvents;
+  ProactiveEvents &
+  SystemEvents &
+  FileOpsEvents &
+  ShellEvents &
+  FileSearchEvents &
+  TodoEvents;
 
 export type EventType = keyof AppEventMap;

@@ -18,9 +18,7 @@
  */
 
 const ALLOWED_PREFIXES = [
-  "src/modules/agent-runtime.ts",
-  "src/modules/tool-router.ts",
-  "src/modules/skill-loader.ts",
+  "src/",
   "skills/",
   "tests/",
 ];
@@ -86,21 +84,6 @@ export function needsHumanApproval(level: InstallLevel): boolean {
 export function isInstallBlocked(level: InstallLevel): boolean {
   return level === 4;
 }
-
-/**
- * High-risk permission keywords — tools with these permissions default to at least Level 3
- */
-const HIGH_RISK_PERMISSIONS = [
-  "shell",
-  "filesystem write",
-  "browser automation",
-  "email sending",
-  "payment",
-  "deployment",
-  "database write",
-  "credential access",
-];
-
 export function classifyInstallLevel(permissions: {
   network?: string[];
   filesystem?: { read?: string[]; write?: string[] };

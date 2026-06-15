@@ -22,7 +22,9 @@ export interface LLMModelConfig {
   model: string;
   /** Base URL override (optional, for custom endpoints) */
   baseUrl?: string;
-  /** API key (read from env, not stored in config) */
+  /** API key for this model (overrides global/system apiKey) */
+  apiKey?: string;
+  /** API key env var name (read from env if apiKey is not set directly) */
   apiKeyEnvVar?: string;
   /** Maximum tokens for completion */
   maxTokens?: number;
@@ -65,12 +67,34 @@ export interface LLMTaskRoute {
   overrides?: Partial<Pick<LLMModelConfig, "maxTokens" | "temperature" | "topP">>;
 }
 
+// ===== Tool Types (OpenAI function calling) =====
+
+export interface LLMTool {
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
+}
+
+export interface LLMToolCall {
+  id: string;
+  type: "function";
+  function: {
+    name: string;
+    arguments: string;
+  };
+}
+
 // ===== Request/Response Types =====
 
 export interface LLMChatMessage {
   role: "system" | "user" | "assistant" | "tool";
-  content: string;
+  content: string | null;
   name?: string;
+  tool_calls?: LLMToolCall[];
+  tool_call_id?: string;
 }
 
 export interface LLMRequest {
@@ -84,6 +108,10 @@ export interface LLMRequest {
   maxTokens?: number;
   /** Override temperature */
   temperature?: number;
+  /** Tools (functions) available to the model */
+  tools?: LLMTool[];
+  /** Tool choice mode */
+  tool_choice?: "auto" | "none" | { type: "function"; function: { name: string } };
   /** Request metadata for tracing */
   metadata?: Record<string, unknown>;
 }
@@ -103,6 +131,8 @@ export interface LLMResponse {
     completionTokens: number;
     totalTokens: number;
   };
+  /** Tool calls from the LLM */
+  toolCalls?: LLMToolCall[];
   /** Duration in milliseconds */
   durationMs: number;
   /** Whether a fallback model was used */
@@ -121,8 +151,13 @@ export interface LLMProvider {
     maxTokens?: number;
     temperature?: number;
     topP?: number;
+    apiKey?: string;
+    baseUrl?: string;
+    tools?: LLMTool[];
+    tool_choice?: LLMRequest["tool_choice"];
   }): Promise<{
     content: string;
+    toolCalls?: LLMToolCall[];
     usage?: {
       promptTokens: number;
       completionTokens: number;

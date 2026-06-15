@@ -18,11 +18,31 @@ OpenEvolve is an **event-driven self-evolving agent**. Every operation flows thr
 
 ### Three Evolution Chains
 
-1. **Repair chain (internal)**: `agent.failure.reported` → `evolution.analysis.requested` → `evolution.patch.proposed` → `evolution.patch.applied` → `evolution.eval.requested` → `release.created` → `deploy.succeeded`
-2. **Scout chain (external)**: `feature.scout.requested` → `feature.sources.discovered` → `feature.candidate.found` → `feature.candidate.scored` → `feature.spec.generated` → `feature.prototype.created` → `feature.eval.*` → `plugin.installed`
+1. **Self-optimization chain (internal)**: `agent.failure.reported` or `proactive.optimization.triggered` → `SelfOptimizer` (5-step tool-calling loop: READ → ANALYZE → EDIT → VERIFY → FINALIZE) → `evolution.patch.proposed` → `evolution.patch.applied` → `evolution.eval.requested` → `release.created` → `deploy.succeeded` (restart)
+2. **Scout chain (external)**: `feature.scout.requested` → `feature.sources.discovered` → `feature.candidate.found` → `feature.candidate.scored` → `feature.spec.generated` → `feature.prototype.created` → `feature.eval.*` → `plugin.installed` (or code_patch / skill_file)
 3. **Browser chain**: `browser.search.requested` / `browser.fetch.requested` / `browser.task.requested` → completion events
 
 All event types are in `src/core/event-types.ts`. New events must be added to one of the typed event maps there (merged into `AppEventMap`).
+
+### Self-Optimization (Repair + Proactive)
+
+`src/modules/self-optimizer.ts` is the unified self-improvement agent. It replaces the old separate FailureMiner + PatchGenerator + ProactiveOptimizer modules. It uses the shared tool infrastructure (`src/modules/tools.ts`) in an LLM-powered loop:
+
+1. **READ** — Uses `file_read`, `grep`, `glob` to gather context
+2. **ANALYZE** — Uses `grep`, `glob`, `browser_search` to analyze root cause
+3. **EDIT** — Uses `file_edit`, `file_write` to implement changes
+4. **VERIFY** — Uses `grep`, `bash` (type check, tests) to confirm correctness
+5. **FINALIZE** — Publishes `evolution.patch.proposed` → safe apply → eval → release → deploy → restart
+
+### Scout Chain Integration Types
+
+The scout chain now supports three integration methods (determined by LLM in FeatureAnalyzer):
+
+| Type | Output | Installation |
+|------|--------|-------------|
+| `plugin` | New module in `src/plugins/<name>/` | Plugin directory |
+| `code_patch` | File changes via `evolution.patch.proposed` | Repair chain |
+| `skill_file` | Markdown file in `skills/<name>.md` | Skills directory |
 
 ### Module System
 
@@ -30,13 +50,19 @@ Modules implement `AgentModule` (`src/core/module.ts`) — just `name` and `star
 
 `src/main.ts` starts modules in a specific order; the LLM bridge must start first so it can observe all subsequent events.
 
+### Shared Tools
+
+`src/modules/tools.ts` provides shared tool definitions (`AGENT_TOOLS`) and `executeTool()` used by both `agent-runtime.ts` (interactive chat) and `self-optimizer.ts`. Tools communicate with handler modules exclusively via EventBus events.
+
 ### LLM Layer
 
-`src/llm/index.ts` — `LLMService` wraps `ModelRegistry` + `ModelRouter`. Supports task-based routing (different models for `chat`, `patch_generate`, `spec_generate`, etc.), automatic fallback chains, runtime model switching, and cost tracking. Models and routes are defined in `model-registry.ts:createDefaultRegistry()`. Set `LLM_DEFAULT_MODEL` env var to override the default at startup.
+`src/llm/index.ts` — `LLMService` wraps `ModelRegistry` + `ModelRouter`. Supports task-based routing (different models for `chat`, `patch_generate`, `spec_generate`, etc.), automatic fallback chains, runtime model switching, and cost tracking. Models and routes are loaded from `config.json`.
+
+API keys are resolved in order: `config.model.apiKey` → `config.model.apiKeyEnvVar` (env var name) → `process.env.OPENAI_API_KEY` (global fallback).
 
 ### Security Policy
 
-`src/core/policy.ts` — restricts which file paths the agent may modify (allow-list) and classifies plugin install levels (1–4). The policy is enforced by modules, not at the filesystem level.
+`src/core/policy.ts` — restricts which file paths the agent may modify (allow-list) and classifies plugin install levels (1–4). The policy is enforced by modules, not at the filesystem level. Protected files: `src/core/event-bus.ts`, `src/core/policy.ts`.
 
 ### Plugin System
 
@@ -44,8 +70,8 @@ Plugins implement `AgentPlugin` (`src/core/plugin.ts`) with declared permissions
 
 ### TUI
 
-Terminal interface via `blessed` and `blessed-contrib` (`src/modules/tui.ts`). Set `NO_TUI=1` to start headless. Exposes HTTP endpoints for model management (`/models`, `/models/default`, `/models/route`, `/models/check`) and chat (`/chat`).
+Terminal interface via native ANSI escape sequences and Node `readline` (`src/modules/tui.ts`, ~1800 lines). Set `NO_TUI=1` to start headless. HTTP endpoints at `/health`, `/chat`, `/models`, `/models/default`, `/models/route`, `/models/check`.
 
 ### Runtime
 
-The project uses **Bun** as the runtime. TypeScript files are executed directly (no build step). Tests use `bun:test` (`describe`/`it`/`expect`). The `tsconfig.json` is in bundler mode with `noEmit` — TypeScript is only for editor support and `tsc --noEmit` checking.
+The project uses **Bun** as the runtime. TypeScript files are executed directly (no build step). Tests use `bun:test` (`describe`/`it`/`expect`). The `tsconfig.json` is in bundler mode with `noEmit` and strict checks enabled (`noUnusedLocals`, `noUnusedParameters`).

@@ -1,26 +1,24 @@
 import { cp, mkdir, writeFile, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { AgentModule } from "../core/module";
-import type { FeatureInstallLevel } from "../core/event-types";
+import type { FeatureInstallLevel, FeatureIntegrationType } from "../core/event-types";
 import {
-  canAutoInstall,
-  needsEvalApproval,
   needsHumanApproval,
-  isInstallBlocked
+  isInstallBlocked,
+  isPathAllowed,
 } from "../core/policy";
 
 /**
- * PluginInstaller Module
+ * ArtifactInstaller Module (formerly PluginInstaller)
  *
  * Subscribes to feature.eval.passed
- * Decides whether to auto-install based on install level
- * Publishes plugin.install.requested → plugin.installed
+ * Handles three integration types:
  *
- * Install levels:
- * Level 1: Auto-install allowed (skills/prompts)
- * Level 2: Requires eval approval (read-only plugins)
- * Level 3: Requires human approval or strict sandbox (external API tools)
- * Level 4: Auto-install blocked by default (high-permission tools)
+ *   plugin     → Install to src/plugins/<name>/
+ *   code_patch → Apply changes to source files (or feed into repair chain)
+ *   skill_file → Save to skills/<name>.md
+ *
+ * Publishes plugin.install.requested → plugin.installed
  */
 export const PluginInstallerModule: AgentModule = {
   name: "plugin-installer",
@@ -28,114 +26,169 @@ export const PluginInstallerModule: AgentModule = {
   start(ctx) {
     ctx.bus.subscribe("feature.eval.passed", async (event) => {
       const { candidateId, workspace } = event.payload;
+      const pluginName = `feature-${candidateId.slice(0, 8)}`;
 
-      // Determine install level from previous events
-      // MVP version: default Level 2 (requires eval approval)
-      // Real version: read install level from spec
-      const installLevel: FeatureInstallLevel = determineInstallLevel(workspace);
+      // Read the spec to determine integration type
+      let integrationType: FeatureIntegrationType = "plugin";
+      let installLevel: FeatureInstallLevel = 2;
 
-      console.log(`[plugin-installer] Candidate ${candidateId} eval passed, install level: Level ${installLevel}`);
+      try {
+        const specRaw = await readFile(join(workspace, "spec.json"), "utf8");
+        const spec = JSON.parse(specRaw);
+        integrationType = spec.integrationType ?? "plugin";
+        installLevel = [1, 2, 3, 4].includes(spec.installLevel) ? spec.installLevel : 2;
+      } catch {
+        console.log(`[plugin-installer] No spec.json found, defaulting to plugin/level 2`);
+      }
 
-      // Publish install request event
+      console.log(`[plugin-installer] Installing ${pluginName} as ${integrationType} (level ${installLevel})`);
+
+      // Publish install request
       await ctx.bus.publish({
         type: "plugin.install.requested",
         source: "plugin-installer",
         correlationId: event.correlationId,
         causationId: event.id,
-        payload: {
-          candidateId,
-          pluginName: `feature-${candidateId.slice(0, 8)}`,
-          installLevel,
-          workspace
-        }
+        payload: { candidateId, pluginName, installLevel, workspace },
       });
 
-      // Decide action based on install level
+      // Policy check
       if (isInstallBlocked(installLevel)) {
-        console.log(`[plugin-installer] Candidate ${candidateId} is Level 4 high-permission tool, auto-install blocked`);
+        console.log(`[plugin-installer] Level ${installLevel} blocked by policy`);
         return;
       }
-
       if (needsHumanApproval(installLevel)) {
-        console.log(`[plugin-installer] Candidate ${candidateId} is Level ${installLevel}, requires human approval`);
-        // MVP: log and wait for confirmation; real version should publish an event and wait for human action
+        console.log(`[plugin-installer] Level ${installLevel} requires human approval, skipping`);
         return;
       }
 
-      // Level 1 or Level 2 (already eval-approved) can be installed
-      if (canAutoInstall(installLevel) || needsEvalApproval(installLevel)) {
-        const installPath = await installPlugin(workspace, candidateId);
+      // Route by integration type
+      let installPath: string;
 
-        await ctx.bus.publish({
-          type: "plugin.installed",
-          source: "plugin-installer",
-          correlationId: event.correlationId,
-          causationId: event.id,
-          payload: {
-            candidateId,
-            pluginName: `feature-${candidateId.slice(0, 8)}`,
-            installLevel,
-            installPath
-          }
-        });
-
-        console.log(`[plugin-installer] Plugin installed to ${installPath}`);
+      if (integrationType === "code_patch") {
+        installPath = await installCodePatch(workspace, candidateId, ctx);
+      } else if (integrationType === "skill_file") {
+        installPath = await installSkillFile(workspace, candidateId);
+      } else {
+        // Default: plugin
+        installPath = await installPlugin(workspace, candidateId);
       }
+
+      await ctx.bus.publish({
+        type: "plugin.installed",
+        source: "plugin-installer",
+        correlationId: event.correlationId,
+        causationId: event.id,
+        payload: { candidateId, pluginName, installLevel, installPath },
+      });
+
+      console.log(`[plugin-installer] Installed ${integrationType} to ${installPath}`);
     });
-  }
+  },
 };
 
-/**
- * Read install level from workspace
- *
- * MVP version: default Level 2
- * Real version: read from spec or package.json declaration
- */
-function determineInstallLevel(_workspace: string): FeatureInstallLevel {
-  return 2;
-}
+// ===== Plugin Install =====
 
-/**
- * Install plugin into the system
- *
- * Copy prototype workspace code to src/plugins directory
- */
-async function installPlugin(
-  workspace: string,
-  candidateId: string
-): Promise<string> {
+async function installPlugin(workspace: string, candidateId: string): Promise<string> {
   const pluginName = `feature-${candidateId.slice(0, 8)}`;
   const installPath = join(process.cwd(), "src", "plugins", pluginName);
 
   await mkdir(installPath, { recursive: true });
 
-  // Copy source code
+  try { await cp(join(workspace, "src"), join(installPath, "src"), { recursive: true }); } catch { /* ok */ }
   try {
-    await cp(join(workspace, "src"), join(installPath, "src"), {
-      recursive: true
-    });
-  } catch {
-    // src directory may not exist
-  }
-
-  // Copy package.json
+    const pkg = await readFile(join(workspace, "package.json"), "utf8");
+    await writeFile(join(installPath, "package.json"), pkg, "utf8");
+  } catch { /* ok */ }
   try {
-    const packageJson = await readFile(join(workspace, "package.json"), "utf8");
-    await writeFile(join(installPath, "package.json"), packageJson, "utf8");
-  } catch {
-    // package.json may not exist
-  }
+    const spec = await readFile(join(workspace, "spec.json"), "utf8");
+    await writeFile(join(installPath, "spec.json"), spec, "utf8");
+  } catch { /* ok */ }
 
-  // Write install metadata
   await writeFile(
     join(installPath, "install.json"),
-    JSON.stringify({
-      candidateId,
-      installedAt: new Date().toISOString(),
-      source: "feature-scout"
-    }, null, 2),
-    "utf8"
+    JSON.stringify({ candidateId, installedAt: new Date().toISOString(), source: "feature-scout", integrationType: "plugin" }, null, 2),
+    "utf8",
   );
 
   return installPath;
+}
+
+// ===== Code Patch Install =====
+
+async function installCodePatch(
+  workspace: string,
+  candidateId: string,
+  ctx: { bus: { publish: (e: any) => Promise<any> } },
+): Promise<string> {
+  // Read the generated changes
+  let changes: Array<{ path: string; content: string }> = [];
+  try {
+    const raw = await readFile(join(workspace, "changes.json"), "utf8");
+    changes = JSON.parse(raw);
+  } catch {
+    console.log(`[plugin-installer] No changes.json found for code_patch`);
+    return workspace;
+  }
+
+  // Filter to allowed paths only
+  const allowed = changes.filter((c) => {
+    const ok = isPathAllowed(c.path);
+    if (!ok) console.log(`[plugin-installer] Skipping forbidden path: ${c.path}`);
+    return ok;
+  });
+
+  if (allowed.length === 0) {
+    console.log(`[plugin-installer] No allowed file changes, skipping patch`);
+    return workspace;
+  }
+
+  console.log(`[plugin-installer] Applying code patch to ${allowed.length} file(s): ${allowed.map((c) => c.path).join(", ")}`);
+
+  // Feed into the repair chain for safe application
+  await ctx.bus.publish({
+    type: "evolution.patch.proposed",
+    source: "plugin-installer",
+    payload: {
+      reason: `Scout patch: ${allowed.length} file(s) from candidate ${candidateId.slice(0, 8)}`,
+      risk: "low" as const,
+      changes: allowed.map((c) => ({
+        path: c.path,
+        operation: "replace_file" as const,
+        content: c.content,
+      })),
+    },
+  });
+
+  // Return where the patch originated
+  const installPath = join(process.cwd(), "src", "plugins", `feature-${candidateId.slice(0, 8)}`);
+  await mkdir(installPath, { recursive: true });
+  await writeFile(
+    join(installPath, "install.json"),
+    JSON.stringify({ candidateId, installedAt: new Date().toISOString(), source: "feature-scout", integrationType: "code_patch", appliedFiles: allowed.map((c) => c.path) }, null, 2),
+    "utf8",
+  );
+
+  return installPath;
+}
+
+// ===== Skill File Install =====
+
+async function installSkillFile(workspace: string, candidateId: string): Promise<string> {
+  let content = "";
+  try {
+    content = await readFile(join(workspace, "skill.md"), "utf8");
+  } catch {
+    console.log(`[plugin-installer] No skill.md found`);
+    return workspace;
+  }
+
+  const skillsDir = join(process.cwd(), "skills");
+  await mkdir(skillsDir, { recursive: true });
+
+  const skillPath = join(skillsDir, `skill-${candidateId.slice(0, 8)}.md`);
+  await writeFile(skillPath, content, "utf8");
+
+  console.log(`[plugin-installer] Skill file saved to ${skillPath}`);
+  return skillPath;
 }

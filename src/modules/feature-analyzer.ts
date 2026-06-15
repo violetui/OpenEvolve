@@ -5,6 +5,7 @@ import type {
   FeatureCapabilityType,
   FeatureSourceType,
   FeatureScorePayload,
+  FeatureIntegrationType,
 } from "../core/event-types";
 import {
   calculateFeatureScore,
@@ -45,13 +46,20 @@ Analyze external features and score them on these dimensions (0.0 to 1.0):
 - novelty: How novel/innovative is this feature?
 - overlap: How much does it overlap with existing capabilities?
 
-Also classify the capability type: plugin, skill, tool, workflow, security, memory, evaluation, or deployment.
-Provide a brief proposed use case.
+Classify the capability type: plugin, skill, tool, workflow, security, memory, evaluation, or deployment.
+
+Also determine the best integration method:
+- "plugin": A standalone new module/plugin (new capability, independent code)
+- "code_patch": Changes to existing code files (improve existing modules, fix patterns, add features to current code)
+- "skill_file": New knowledge/instructions in a skill file (prompt engineering, domain knowledge, workflow instructions)
+
+CRITICAL: Default to "code_patch" or "skill_file" for most discoveries. Only use "plugin" for genuinely standalone new capabilities. Most external discoveries are better integrated by improving existing code or adding knowledge.
 
 Respond ONLY with valid JSON in this format:
 {
   "title": "Feature Title",
   "capabilityType": "plugin|skill|tool|workflow|security|memory|evaluation|deployment",
+  "integrationType": "plugin|code_patch|skill_file",
   "proposedUse": "How this feature would be used",
   "scores": {
     "usefulness": 0.7,
@@ -98,6 +106,7 @@ Provide a feature analysis with scores.`
             url: source.url,
             summary: source.description,
             capabilityType: (analysis.capabilityType ?? "tool") as FeatureCapabilityType,
+            integrationType: (analysis.integrationType ?? "code_patch") as FeatureIntegrationType,
             proposedUse: analysis.proposedUse ?? source.description,
             scores: {
               usefulness: clamp(analysis.scores?.usefulness ?? 0.5),
@@ -264,6 +273,9 @@ function generateFallbackAnalysis(source: {
   return {
     title: preset.title,
     capabilityType: preset.capabilityType ?? "tool",
+    integrationType: (source.type === "github" || source.type === "npm")
+      ? "code_patch" as const
+      : "skill_file" as const,
     proposedUse: preset.proposedUse,
     scores: {
       usefulness: 0.7,
@@ -291,6 +303,7 @@ function generateFallbackCandidate(source: {
     url: source.url,
     summary: source.description,
     capabilityType: analysis.capabilityType as FeatureCapabilityType,
+    integrationType: (analysis.integrationType ?? "code_patch") as FeatureIntegrationType,
     proposedUse: analysis.proposedUse,
     scores: analysis.scores,
     status: "discovered",

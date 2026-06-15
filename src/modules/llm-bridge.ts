@@ -6,7 +6,6 @@
  */
 
 import type { AgentModule } from "../core/module";
-import type { LLMTaskType } from "../llm/types";
 
 export const LLMBridgeModule: AgentModule = {
   name: "llm-bridge",

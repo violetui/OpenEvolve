@@ -4,7 +4,7 @@ import { LLMService } from "../src/llm";
 import { ModelRegistry, createDefaultRegistry } from "../src/llm/model-registry";
 import { ModelRouter } from "../src/llm/model-router";
 import { FallbackProvider } from "../src/llm/providers/fallback-provider";
-import type { LLMModelConfig, LLMTaskType, LLMRequest } from "../src/llm/types";
+import type { LLMModelConfig, LLMRequest } from "../src/llm/types";
 
 describe("LLM Model Registry", () => {
   it("should register and retrieve models", () => {
@@ -12,7 +12,7 @@ describe("LLM Model Registry", () => {
     const model: LLMModelConfig = {
       id: "test-model",
       name: "Test Model",
-      provider: "zai",
+      provider: "openai",
       model: "test-model-v1",
       status: "available",
     };
@@ -46,7 +46,7 @@ describe("LLM Model Registry", () => {
     registry.registerModel({
       id: "model-a",
       name: "Model A",
-      provider: "zai",
+      provider: "openai",
       model: "model-a",
       isDefault: true,
       status: "available",
@@ -54,7 +54,7 @@ describe("LLM Model Registry", () => {
     registry.registerModel({
       id: "model-b",
       name: "Model B",
-      provider: "zai",
+      provider: "openai",
       model: "model-b",
       status: "available",
     });
@@ -70,14 +70,14 @@ describe("LLM Model Registry", () => {
     registry.registerModel({
       id: "primary",
       name: "Primary",
-      provider: "zai",
+      provider: "openai",
       model: "primary",
       status: "available",
     });
     registry.registerModel({
       id: "secondary",
       name: "Secondary",
-      provider: "zai",
+      provider: "openai",
       model: "secondary",
       status: "available",
     });
@@ -97,7 +97,7 @@ describe("LLM Model Registry", () => {
     registry.registerModel({
       id: "changing",
       name: "Changing",
-      provider: "zai",
+      provider: "openai",
       model: "changing",
       status: "available",
     });
@@ -115,14 +115,14 @@ describe("LLM Model Registry", () => {
     registry.registerModel({
       id: "available-model",
       name: "Available",
-      provider: "zai",
+      provider: "openai",
       model: "available",
       status: "available",
     });
     registry.registerModel({
       id: "unavailable-model",
       name: "Unavailable",
-      provider: "zai",
+      provider: "openai",
       model: "unavailable",
       status: "unavailable",
     });
@@ -164,6 +164,13 @@ describe("Model Router", () => {
 
   it("should respect explicit model override in request", () => {
     const registry = createDefaultRegistry({});
+    registry.registerModel({
+      id: "gpt-4o-mini",
+      name: "GPT-4o Mini",
+      provider: "openai",
+      model: "gpt-4o-mini",
+      status: "available",
+    });
     const router = new ModelRouter(registry);
 
     const request: LLMRequest = {
@@ -178,6 +185,13 @@ describe("Model Router", () => {
 
   it("should update routes", () => {
     const registry = createDefaultRegistry({});
+    registry.registerModel({
+      id: "deepseek-r1",
+      name: "DeepSeek R1",
+      provider: "openai",
+      model: "deepseek-r1",
+      status: "available",
+    });
     const router = new ModelRouter(registry);
 
     router.setRoute({
@@ -266,6 +280,13 @@ describe("LLM Service", () => {
 
   it("should switch default model at runtime", () => {
     const service = new LLMService({});
+    service.addModel({
+      id: "gpt-4o",
+      name: "GPT-4o",
+      provider: "openai",
+      model: "gpt-4o",
+      status: "available",
+    });
 
     const result = service.switchModel("gpt-4o");
     expect(result.success).toBe(true);
@@ -283,6 +304,13 @@ describe("LLM Service", () => {
 
   it("should set route for a task type", () => {
     const service = new LLMService({});
+    service.addModel({
+      id: "deepseek-r1",
+      name: "DeepSeek R1",
+      provider: "openai",
+      model: "deepseek-r1",
+      status: "available",
+    });
 
     const result = service.setRoute("chat", "deepseek-r1");
     expect(result.success).toBe(true);
@@ -331,7 +359,7 @@ describe("LLM Service", () => {
         {
           id: "config-model",
           name: "Config Model",
-          provider: "zai",
+          provider: "openai",
           model: "config-model-v1",
           status: "available",
         },
@@ -391,7 +419,7 @@ describe("LLM Event Bus Integration", () => {
         taskType: "chat",
         modelId: "deepseek-v4-pro",
         modelName: "deepseek-v4-pro",
-        provider: "zai",
+        provider: "openai",
         content: "Hello!",
         durationMs: 150,
         tokensUsed: 42,
@@ -449,27 +477,37 @@ describe("LLM Event Bus Integration", () => {
 });
 
 describe("Default Registry Factory", () => {
-  it("should create registry with expected models", () => {
+  it("should create registry with fallback model only", () => {
     const registry = createDefaultRegistry({});
     const models = registry.getAllModels();
 
     const modelIds = models.map((m) => m.id);
     expect(modelIds).toContain("fallback");
-    expect(modelIds).toContain("deepseek-v4-pro");
-    expect(modelIds).toContain("gpt-4o");
-    expect(modelIds).toContain("gpt-4o-mini");
-    expect(modelIds).toContain("claude-3.5-sonnet");
-    expect(modelIds).toContain("deepseek-r1");
+    expect(modelIds.length).toBe(1);
   });
 
-  it("should set deepseek-v4-pro as default", () => {
+  it("should set fallback as default when no other models", () => {
     const registry = createDefaultRegistry({});
-    expect(registry.getDefaultModelId()).toBe("deepseek-v4-pro");
+    expect(registry.getDefaultModelId()).toBe("fallback");
   });
 
-  it("should respect LLM_DEFAULT_MODEL env variable", () => {
+  it("should respect LLM_DEFAULT_MODEL env variable when model is registered", () => {
     const registry = createDefaultRegistry({ LLM_DEFAULT_MODEL: "gpt-4o" });
-    expect(registry.getDefaultModelId()).toBe("gpt-4o");
+    // gpt-4o is not registered, so override is ignored
+    expect(registry.getDefaultModelId()).toBe("fallback");
+
+    // But if we register it first, then the override works
+    const registry2 = createDefaultRegistry({});
+    registry2.registerModel({
+      id: "gpt-4o",
+      name: "GPT-4o",
+      provider: "openai",
+      model: "gpt-4o",
+      status: "available",
+    });
+    // Simulate env override (setDefaultModel validates model exists)
+    registry2.setDefaultModel("gpt-4o");
+    expect(registry2.getDefaultModelId()).toBe("gpt-4o");
   });
 
   it("should include fallback provider", () => {
@@ -478,9 +516,9 @@ describe("Default Registry Factory", () => {
     expect(provider).toBeDefined();
   });
 
-  it("should include ZAI provider", () => {
+  it("should include OpenAI provider", () => {
     const registry = createDefaultRegistry({});
-    const provider = registry.getProvider("zai");
+    const provider = registry.getProvider("openai");
     expect(provider).toBeDefined();
   });
 });
